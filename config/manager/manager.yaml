@@ -1,26 +1,68 @@
+# Namespace for the Controller
 apiVersion: v1
 kind: Namespace
 metadata:
   labels:
       controller-tools.k8s.io: "1.0"
-  name: system
+  name: applier-system
+---
+# RBAC permissions for Deployments and ContinuousApply
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: applier-role
+rules:
+- apiGroups:
+  - apply.k8s.io
+  resources:
+  - '*'
+  verbs:
+  - '*'
+- apiGroups:
+  - "apps"
+  resources:
+  - "deployments"
+  verbs:
+  - '*'
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  labels:
+    controller-tools.k8s.io: "1.0"
+  name: applier-rolebinding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: applier-role
+subjects:
+- kind: ServiceAccount
+  namespace: applier-system
+  name: default
 ---
 apiVersion: v1
 kind: Service
 metadata:
   name: controller-manager-service
+  namespace: applier-system
   labels:
     control-plane: controller-manager
     controller-tools.k8s.io: "1.0"
 spec:
   selector:
     control-plane: controller-manager
-    controller-tools.k8s.io: "1.0"
+  ports:
+  - port: 80
+    name: web
+  clusterIP: None
 ---
 apiVersion: apps/v1
 kind: StatefulSet
 metadata:
   name: controller-manager
+  namespace: applier-system
   labels:
       control-plane: controller-manager
       controller-tools.k8s.io: "1.0"
@@ -28,37 +70,23 @@ spec:
   selector:
     matchLabels:
       control-plane: controller-manager
-      controller-tools.k8s.io: "1.0"
   serviceName: controller-manager-service
   template:
     metadata:
       labels:
         control-plane: controller-manager
-        controller-tools.k8s.io: "1.0"
     spec:
       containers:
-        command:
-        - /root/manager
-        name: manager
-        resources:
-          limits:
-            cpu: 100m
-            memory: 30Mi
-          requests:
-            cpu: 100m
-            memory: 20Mi
+        - command:
+          - /usr/local/bin/manager
+          image: pwittrock/continuous-apply:v24
+          imagePullPolicy: Always
+          name: manager
+          resources:
+            limits:
+              cpu: 100m
+              memory: 30Mi
+            requests:
+              cpu: 100m
+              memory: 20Mi
       terminationGracePeriodSeconds: 10
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  labels:
-    controller-tools.k8s.io: "1.0"
-  name: rolebinding
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: role
-subjects:
-- kind: ServiceAccount
-  name: default

@@ -1,31 +1,28 @@
 # Build and test the manager binary
-FROM golang:1.9.3 as builder
-
-# Copy in the go src
+FROM golang:1.10.3 as builder
 WORKDIR /go/src/github.com/pwittrock/continuous-apply
 COPY pkg/    pkg/
 COPY cmd/    cmd/
 COPY vendor/ vendor/
+RUN CGO_ENABLED=0 GOOS=$OS GOARCH=$ARCH go build -o manager github.com/pwittrock/continuous-apply/cmd/manager
+RUN CGO_ENABLED=0 GOOS=$OS GOARCH=$ARCH go build -o continuous-apply github.com/pwittrock/continuous-apply/cmd/continuous-apply
 
-# Run tests as a sanity check
-ENV TEST_ASSET_DIR /usr/local/bin
-ENV TEST_ASSET_KUBECTL $TEST_ASSET_DIR/kubectl
-ENV TEST_ASSET_KUBE_APISERVER $TEST_ASSET_DIR/kube-apiserver
-ENV TEST_ASSET_ETCD $TEST_ASSET_DIR/etcd
-ENV TEST_ASSET_URL https://storage.googleapis.com/k8s-c10s-test-binaries
-RUN curl ${TEST_ASSET_URL}/etcd-Linux-x86_64 --output $TEST_ASSET_ETCD
-RUN curl ${TEST_ASSET_URL}/kube-apiserver-Linux-x86_64 --output $TEST_ASSET_KUBE_APISERVER
-RUN curl https://storage.googleapis.com/kubernetes-release/release/v1.9.2/bin/linux/amd64/kubectl --output $TEST_ASSET_KUBECTL
-RUN chmod +x $TEST_ASSET_ETCD
-RUN chmod +x $TEST_ASSET_KUBE_APISERVER
-RUN chmod +x $TEST_ASSET_KUBECTL
-RUN go test ./pkg/... ./cmd/...
+FROM golang:1.10.3
+RUN apt-get update && apt-get install -y apt-transport-https
+RUN apt-get install git curl -y
+RUN curl -s https://packages.cloud.google.com/apt/doc/apt-key.gpg | apt-key add -
+RUN touch /etc/apt/sources.list.d/kubernetes.list
+RUN echo "deb http://apt.kubernetes.io/ kubernetes-xenial main" | tee -a /etc/apt/sources.list.d/kubernetes.list
+RUN apt-get update
+RUN apt-get install kubectl -y
+ENV VERSION 1.10.3
+ENV OS linux
+ENV ARCH amd64
+RUN curl https://dl.google.com/go/go$VERSION.$OS-$ARCH.tar.gz --output go$VERSION.$OS-$ARCH.tar.gz
+RUN tar -C /usr/local -xzf go$VERSION.$OS-$ARCH.tar.gz
+ENV PATH $PATH:/usr/local/go/bin
+RUN go get github.com/kubernetes-sigs/kustomize
 
-# Build
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o manager github.com/pwittrock/continuous-apply/cmd/manager
-
-# Copy the controller-manager into a thin image
-FROM ubuntu:latest
 WORKDIR /root/
-COPY --from=builder /go/src/github.com/pwittrock/continuous-apply/manager .
-ENTRYPOINT ["./manager"]
+COPY --from=builder /go/src/github.com/pwittrock/continuous-apply/manager /usr/local/bin/manager
+COPY --from=builder /go/src/github.com/pwittrock/continuous-apply/continuous-apply ./continuous-apply
