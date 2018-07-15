@@ -89,6 +89,7 @@ const inProgressIcon = "![inprogress](https://material.io/tools/icons/static/ico
 
 func (m *Manager) UpdateIssueStatus() error {
 	var err error
+	log.Printf("checking issue %d\n", m.Issue.GetNumber())
 	m.Issue, _, err = m.gitHubClient.Issues.Get(context.Background(), m.Repo.Owner, m.Repo.Repo, m.Issue.GetNumber())
 	if err != nil {
 		return err
@@ -101,16 +102,19 @@ func (m *Manager) UpdateIssueStatus() error {
 	for _, t := range m.StatusReporters {
 		switch {
 		case s.HasAll(t.CompleteLabels...):
+			log.Printf("%s Complete\n", t.Name)
 			t.Status = "Complete"
 			t.Done = true
 			t.StatusIcon = doneIcon
 			state = "closed"
 		case s.HasAll(t.InProgressLabels...):
+			log.Printf("%s In Progress\n", t.Name)
 			t.Status = "In Progress"
 			t.Done = false
 			t.StatusIcon = inProgressIcon
 			state = "open"
 		default:
+			log.Printf("%s Pending\n", t.Name)
 			t.Status = "Pending"
 			t.Done = false
 			t.StatusIcon = ""
@@ -187,27 +191,40 @@ func (m *Manager) SyncToPRAndIssue() error {
 			first = false
 			if prNum != m.PullRequest.GetNumber() {
 				log.Printf("PR does not match %d %d", prNum, m.PullRequest.GetNumber())
+				closed := "closed"
+				_, _, err := m.gitHubClient.Issues.Edit(context.Background(), m.Repo.Owner, m.Repo.Repo, issue.GetNumber(),
+					&github.IssueRequest{
+						State: &closed,
+					})
+				if err != nil {
+					log.Printf("could not close issue %v %v", issue.GetNumber(), err)
+				}
 				continue
 			}
 			if commit != m.Commit {
 				log.Printf("Commit does not match [%s] [%s]", commit, m.Commit)
+				closed := "closed"
+				_, _, err := m.gitHubClient.Issues.Edit(context.Background(), m.Repo.Owner, m.Repo.Repo, issue.GetNumber(),
+					&github.IssueRequest{
+						State: &closed,
+					})
+				if err != nil {
+					log.Printf("could not close issue %v %v", issue.GetNumber(), err)
+				}
 				continue
 			}
 
 			m.Issue = issue
 			log.Printf("Issue %d matches PR %d\n", m.Issue.GetNumber(), m.PullRequest.GetNumber())
-			break
-		}
-
-		// Close all issues including the first if they are not the actively being rolled out issue
-		closed := "closed"
-		_, _, err := m.gitHubClient.Issues.Edit(context.Background(), m.Repo.Owner, m.Repo.Repo, issue.GetNumber(),
-			&github.IssueRequest{
-				State: &closed,
-			})
-		if err != nil {
-			log.Printf("could not close issue %v %v", issue.GetNumber(), err)
-			continue
+		} else {
+			closed := "closed"
+			_, _, err := m.gitHubClient.Issues.Edit(context.Background(), m.Repo.Owner, m.Repo.Repo, issue.GetNumber(),
+				&github.IssueRequest{
+					State: &closed,
+				})
+			if err != nil {
+				log.Printf("could not close issue %v %v", issue.GetNumber(), err)
+			}
 		}
 	}
 
@@ -228,7 +245,7 @@ func (m *Manager) SyncToPRAndIssue() error {
 			return err
 		}
 		issueBody := o.String()
-		title := fmt.Sprintf("Rollout #%s", m.Commit)
+		title := fmt.Sprintf("Rollout #%d", m.PullRequest.GetNumber())
 		labels := append(m.OpenActions.AddLabels, m.Label)
 		ir := &github.IssueRequest{
 			Body:   &issueBody,
@@ -255,8 +272,10 @@ func (m *Manager) SyncToPRAndIssue() error {
 var bodyTemplate = template.Must(template.New("name").Parse(`[pull-request]: #{{ .PullRequest.GetNumber}}
 [commit]: {{ .Commit }}
 
+Rollout #{{ .PullRequest.GetNumber}}
+
 {{ range $r := .StatusReporters -}}	
-- {{ $r.StatusIcon }} {{ $r.Name }} - *{{ $r.Status }}*{{ if not $r.Done }} (run after{{ range $w := $r.WaitFor }} {{ $w }}{{ end }}){{ end }}
+- {{ $r.StatusIcon }} {{ $r.Name }} - *{{ $r.Status }}*{{ if not $r.Done }}{{ if $r.WaitFor}} (run after{{ range $w := $r.WaitFor }} {{ $w }}{{ end }}){{end}}{{ end }}
 {{ end -}}
 `))
 

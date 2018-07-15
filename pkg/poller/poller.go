@@ -183,7 +183,7 @@ func (p *Poller) SyncPRs() (bool, error) {
 
 		// No new issues
 		if commit == p.Commit {
-			return false, nil
+			return true, nil
 		}
 
 		// New issue found
