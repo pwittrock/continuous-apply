@@ -59,6 +59,8 @@ type StatusReporters struct {
 	InProgressLabels []string `json:"inProgressLabels"`
 
 	CompleteLabels []string `json:"completeLabels"`
+
+	WaitFor []string `json:"waitFor"`
 }
 
 type IssueManagerComponents struct {

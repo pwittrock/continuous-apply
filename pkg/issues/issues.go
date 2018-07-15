@@ -145,7 +145,7 @@ func (m *Manager) SyncToPRAndIssue() error {
 		Labels:    []string{m.Label},
 		Assignee:  m.OpenIssue.Assignee,
 		Milestone: m.OpenIssue.Milestone,
-		State:     "open",
+		State:     "all",
 		Sort:      "created",
 		Direction: "desc",
 	})
@@ -158,6 +158,9 @@ func (m *Manager) SyncToPRAndIssue() error {
 	// Find matching issue if it exists already
 	for _, issue := range issues {
 		log.Printf("Checking issue %d\n", issue.GetNumber())
+		if issue.IsPullRequest() {
+			continue
+		}
 		if first {
 			body := issue.GetBody()
 			if !rolloutRegex.MatchString(body) {
@@ -210,12 +213,13 @@ func (m *Manager) SyncToPRAndIssue() error {
 
 	// Create a new issue
 	if m.Issue == nil {
+		log.Printf("nil issue for %d %s\n", m.PullRequest.GetNumber(), m.Commit)
 		if m.Commit == "" {
-			return fmt.Errorf("No commit for PR")
+			return fmt.Errorf("no commit for PR")
 		}
 
 		if m.PullRequest == nil {
-			return fmt.Errorf("No PullRequest")
+			return fmt.Errorf("no PullRequest")
 		}
 
 		// Create a new issue for the PR
@@ -252,7 +256,7 @@ var bodyTemplate = template.Must(template.New("name").Parse(`[pull-request]: #{{
 [commit]: {{ .Commit }}
 
 {{ range $r := .StatusReporters -}}	
-- [{{ if $r.Done }}x{{ else }} {{end}}] {{ $r.Name }} - *{{ $r.Status }}*
+- {{ $r.StatusIcon }} {{ $r.Name }} - *{{ $r.Status }}*{{ if not $r.Done }} (run after{{ range $w := $r.WaitFor }} {{ $w }}{{ end }}){{ end }}
 {{ end -}}
 `))
 

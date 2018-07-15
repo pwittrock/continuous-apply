@@ -36,7 +36,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/source"
 )
 
-const caImage = "pwittrock/continuous-apply:v24"
+const caImage = "pwittrock/continuous-apply:v25"
 
 // Add creates a new ContinuousApply Controller and adds it to the Manager.  The Manager will set fields on the Controller
 // and Start it when the Manager is Started.

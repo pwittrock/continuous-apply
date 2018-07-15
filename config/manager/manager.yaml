@@ -79,7 +79,7 @@ spec:
       containers:
         - command:
           - /usr/local/bin/manager
-          image: pwittrock/continuous-apply:v24
+          image: pwittrock/continuous-apply:v25
           imagePullPolicy: Always
           name: manager
           resources:
