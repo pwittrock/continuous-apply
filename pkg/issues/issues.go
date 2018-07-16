@@ -138,6 +138,10 @@ func (m *Manager) UpdateIssueStatus() error {
 var rolloutRegex = regexp.MustCompile("\\[pull-request\\]: #(\\d+)\\s+\\[commit\\]: ([a-z0-9]+)\\s+")
 
 func (m *Manager) SyncToPRAndIssue() error {
+	m.PullRequest = nil
+	m.Commit = ""
+	m.Issue = nil
+
 	// Get the PR we should sync next
 	if err := m.SyncPollerPRs(); err != nil {
 		return err
